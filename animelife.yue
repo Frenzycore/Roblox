@@ -1,0 +1,315 @@
+--7450124099
+
+macro LUA_IMPORTURL=(NAME,URL)->{code:"local #{NAME::gsub '"', ''} = loadstring(game:HttpGet(#{URL}))()",type:"text"}
+
+class Interface
+    init: () =>
+        $LUA_IMPORTURL "Library", "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"
+        $LUA_IMPORTURL "ThemeManager", "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"
+        $LUA_IMPORTURL "SaveManager", "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"
+
+        @Toggles = Library.Toggles
+        @Options = Library.Options
+
+        with ThemeManager
+            ::SetLibrary Library
+            ::SetFolder("pudding")
+        with SaveManager
+            SaveManager::SetLibrary Library
+            SaveManager::IgnoreThemeSettings!
+            SaveManager::SetIgnoreIndexes {"MenuKeybind"}
+            SaveManager::SetFolder("pudding/animelife")
+
+        with Window = Library::CreateWindow {Title: "Anime Life", Footer: "Anime Life by Ave | discord.gg/RVED6GzEyG"}
+            with Needs = ::AddTab "Needs"
+                with Energy = ::AddLeftGroupbox "Energy"
+                    ::AddToggle "Energy_AutoBuy", {
+                        Text: "Auto buy cold brew"
+                    }
+                    ::AddToggle "Energy_AutoUse", {
+                        Text: "Auto drink cold brew"
+                    }
+                    ::AddSlider "Energy_DrinkAmount", {
+                        Text: "Drink Amount"
+                        Default: 5
+                        Min: 0
+                        Max: 50
+                        Rounding: 0
+                        Compact: false
+                    }
+                    ::AddSlider "Energy_Amount", {
+                        Text: "Minimum Amount"
+                        Default: 25
+                        Min: 0
+                        Max: 100
+                        Rounding: 0
+                        Compact: false
+                    }
+            with Minigames = ::AddTab "Minigames"
+                with Karaoke = ::AddLeftGroupbox "Karaoke"
+                    ::AddToggle "Karaoke_AutoPlay", {
+                        Text: "Auto Play"
+                    }
+                with Hibachi = ::AddLeftGroupbox "Hibachi"
+                    ::AddToggle "Hibachi_AutoPlay", {
+                        Text: "Auto Cut"
+                    }
+                with Fishing = ::AddRightGroupbox "Fishing"
+                    ::AddToggle "Fishing_InstantCatch", {
+                        Text: "Instant Catch"
+                    }
+                    ::AddToggle "Fishing_InstantReel", {
+                        Text: "Instant Reelable"
+                    }
+                with Yakitori = ::AddRightGroupbox "Yakitori"
+                    ::AddToggle "Yakitori_AutoFlip", {
+                        Text: "Auto Flip"
+                    }
+                    ::AddToggle "Yakitori_AutoFinish", {
+                        Text: "Auto Finish"
+                    }
+                with PizzaDelivery = ::AddRightGroupbox "Pizza Delivery"
+                    ::AddToggle "PizzaDelivery_AutoDeliver", {
+                        Text: "Auto Delivery"
+                    }
+                    ::AddSlider "PizzaDelivery_Time", {
+                        Text: "Delivery Time"
+                        Default: 15
+                        Min: 5
+                        Max: 30
+                        Rounding: 1
+                        Compact: false
+                    }
+                with Basketball = ::AddLeftGroupbox "Basketball"
+                    ::AddToggle "Basketball_AlwaysPerfect", {
+                        Text: "Always Perfect"
+                    }
+                    ::AddToggle "Basketball_AutoHoop", {
+                        Text: "Auto Hoop"
+                    }
+            with Settings = ::AddTab "Settings"
+                with UI = ::AddRightGroupbox "UI"
+                    with BindLabel = ::AddLabel "Menu Keybind"
+                        ::AddKeyPicker("MenuKeybind", { Default: "RightShift", NoUI: true, Text: "Menu Keybind" })
+                        Library.ToggleKeybind = Library.Options.MenuKeybind
+                SaveManager::BuildConfigSection Settings
+                ThemeManager::ApplyToTab Settings
+
+class KaraokeMinigame
+    @Game = require game.ReplicatedStorage.Systems.Gui.Views.KaraokeGame
+    @Env = getfenv @Game.Init
+
+    @GameUI = debug.getupvalue @Game.Init, 1
+    @Tracks = debug.getupvalue @Game.Init, 4
+
+    @Feedback = debug.getupvalue @Game.Start, 1
+    @NoteSignal = debug.getupvalue @Game.GetNoteScoredSignal, 1
+
+    @RemoveNote = @Env.RemoveNote
+
+    init: () =>
+        while true
+            if Interface.Toggles.Karaoke_AutoPlay.Value
+                for UITrack in *@GameUI.Tracks::GetChildren!
+                    Notes = @Tracks[UITrack]
+
+                    continue unless Notes
+
+                    TrackEnd = UITrack.End
+                    TrackPosition = TrackEnd.AbsolutePosition
+                    TrackSize = TrackEnd.AbsoluteSize
+
+                    ClosestNote = ClosestDistance = nil
+
+                    for Note in *Notes
+                        NotePosition = Note.AbsolutePosition
+                        NoteDistance = math.abs TrackPosition.Y - NotePosition.Y
+
+                        if not ClosestDistance or NoteDistance < ClosestDistance
+                            ClosestNote = Note
+                            ClosestDistance = NoteDistance
+                    
+                    if ClosestNote and ClosestDistance <= TrackSize.Y / 2
+                        Note = ClosestNote.PickedNote
+                        NoteColor = Note.ImageColor3
+
+                        @NoteSignal::Fire Note::GetAttribute("NoteType"), NoteColor
+                        @Feedback::DisplayCutQuality "Perfect!", ClosestNote.AbsolutePosition + ClosestNote.AbsolutePosition / 2, NoteColor 
+                        @.RemoveNote UITrack, ClosestNote
+            task.wait!
+
+class HibachiMinigame
+    @HibachiModule = game.ReplicatedStorage.Systems.Modules.Minigames.HibachiNinja
+    @Game = require @HibachiModule
+    @Env = getfenv @Game.Run
+    @ReplicateSlice = @HibachiModule.ReplicateSlice
+
+    @Signal = debug.getupvalue @Game.GetScoredSignal, 1
+    @ToChop = debug.getupvalue @Game.Run, 15
+
+    @MakeChopped = @Env.makeChopped
+
+
+    init: () =>
+        while true
+            task.wait!
+
+            continue unless Interface.Toggles.Hibachi_AutoPlay.Value
+
+            for ToChop in *@ToChop
+                LastCF = ToChop.LastCFrame
+                continue unless LastCF
+
+                Model = ToChop.Model
+                Model.PrimaryPart::Destroy!
+
+                game.Debris::AddItem Model, 0.2
+
+                Chopped = @.MakeChopped Model.Name
+                Chopped::PivotTo LastCF
+                Chopped.Parent = workspace
+                game.Debris::AddItem Chopped, 5
+
+                table.remove @ToChop, i
+
+                @ReplicateSlice::FireServer!
+                @Signal::Fire!
+
+class FishingMinigame
+    @Game = require game.ReplicatedStorage.Systems.Gui.Views.FishingMinigame
+    @GameHandler = require game.ReplicatedStorage.Systems.Fishing
+
+    @Env = getfenv @Game.Init
+
+    @Finish = @Env.Finish
+    @RunMinigame = @Env.RunMinigame
+
+
+    init: () =>
+        while true
+            if Interface.Toggles.Fishing_InstantReel.Value
+                debug.setupvalue @GameHandler.DoReel, 1, true
+
+            if Interface.Toggles.Fishing_InstantCatch.Value
+                debug.setupvalue @.RunMinigame, 2, 1000
+            
+            task.wait!
+
+class YakitoriStandMinigame
+    @Game = require game.ReplicatedStorage.Systems.Modules.Minigames.Yakitori
+    @Env = getfenv @Game.Run
+
+    @Signal = debug.getupvalue @Game.GetScoredSignal, 1
+
+    @FlipKebab = @Env.flipKebab
+    @CompleteKebab = @Env.completeKebab
+
+    init: () =>
+        while true
+            task.wait!
+            Yakitoris = debug.getupvalue @Game.Run, 13
+
+            continue unless Yakitoris
+
+            for Yakitori in *Yakitoris::GetChildren!
+                State = Yakitori::GetAttribute "State"
+                Flipped = Yakitori::GetAttribute "Flipped"
+
+                switch State
+                    when "Cooking"
+                        if Interface.Toggles.Yakitori_AutoFlip.Value
+                            @.FlipKebab Yakitori if not Flipped
+                    when "Done"
+                        if Interface.Toggles.Yakitori_AutoFinish.Value
+                            @Signal::Fire!
+                            @.CompleteKebab Yakitori
+
+
+class PizzaDeliveryMinigame
+    @Game = require game.ReplicatedStorage.Systems.Modules.Minigames.PizzaDelivery
+    @Env = getfenv @Game.GetScoredSignal
+
+    @BikeHandler = require game.ReplicatedStorage.Systems.Bike
+
+    @JobHandler = require game.ReplicatedStorage.Systems.Jobs
+
+    @Signal = debug.getupvalue @Game.GetScoredSignal, 1
+
+    @RouteToDelivery = @Env.RouteToDelivery
+
+    init: () =>
+        with @Game
+            Old = .CreateCompletionRegion
+            .CreateCompletionRegion = (_, a1, a2, a3, a4, a5, a6) ->
+                if (@JobHandler::GetCurrentJob game.Players.LocalPlayer) == "PizzaDelivery"
+                    warn "Created region"
+                    task.delay Interface.Options.PizzaDelivery_Time.Value, () ->
+                        a5! if Interface.Toggles.PizzaDelivery_AutoDeliver.Value
+
+                return Old _, a1, a2, a3, a4, a5, a6
+        
+class BasketballMinigame
+    @Game = require game.ReplicatedStorage.Systems.Modules.Minigames.BasketballGame
+    @GameUI = require game.ReplicatedStorage.Systems.Gui.Views.BasketballGame
+
+    @Env = getfenv @GameUI.Init
+
+    @OnClick = @Env.OnClick -- -> u44
+    
+    @IsWinner = debug.getupvalue @.OnClick, 6
+
+    @Feedback = debug.getupvalue @Game.Run, 2
+    @Presets = debug.getupvalue @Game.HeartbeatRenderIteration, 6
+    @Signal = debug.getupvalue @Game.GetScoredSignal, 1
+
+    @JobHandler = require game.ReplicatedStorage.Systems.Jobs
+
+    @init: () =>
+        OldWinner = @.IsWinner
+        debug.setupvalue @.OnClick, 6, (...) ->
+            return true if Interface.Toggles.Basketball_AlwaysPerfect.Value
+            return OldWinner ...
+
+        while true
+            if (@JobHandler::GetCurrentJob game.Players.LocalPlayer) == "BasketballGame"
+                if Interface.Toggles.Basketball_AutoHoop.Value
+                    @.OnClick!
+
+            task.wait!
+
+class AutoNeeds
+    @Profile = require game.ReplicatedStorage.Systems.Profile
+    @Inventory = require game.ReplicatedStorage.Systems.Inventory
+
+    @BuyItem = game.ReplicatedStorage.Systems.Shop.BuyItem
+    @ConsumeFood = game.ReplicatedStorage.Systems.Food.ConsumeFood
+
+    @init: () => 
+        Profile = @Profile::GetProfile game.Players.LocalPlayer
+        while true
+            Item = @Inventory::GetOwnedItem game.Players.LocalPlayer, "ColdBrewBottle"
+            Count = 0
+            if Item
+                Count = Item::GetAttribute "Count" or 1
+
+                if Count < Interface.Options.Energy_DrinkAmount.Value
+                    @BuyItem::InvokeServer "ColdBrewBottle" if Interface.Toggles.Energy_AutoBuy.Value
+
+                if Count > 0
+                    if (Profile.Needs.Energy::GetAttribute "Value") <= Interface.Options.Energy_Amount.Value
+                        @ConsumeFood::FireServer "ColdBrewBottle" if Interface.Toggles.Energy_AutoUse.Value
+            else
+                @BuyItem::InvokeServer "ColdBrewBottle" if Interface.Toggles.Energy_AutoBuy.Value
+
+            task.wait 5
+
+
+Interface::init!
+
+task.spawn KaraokeMinigame::init
+task.spawn HibachiMinigame::init
+task.spawn FishingMinigame::init
+task.spawn YakitoriStandMinigame::init
+task.spawn PizzaDeliveryMinigame::init
+task.spawn BasketballMinigame::init
+task.spawn AutoNeeds::init
